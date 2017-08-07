@@ -1,0 +1,58 @@
+StringBuilder线程不安全，StringBuffer线程安全，
+StringBuider和StringBuffer底层怎么实现的（可变长字符数组，类似ArrayList的底层实现），区别是什么（一个没有锁一个每个方法都加Synchronized）
+String类为什么设计成final（常量优化、多线程安全）
+锁优化手段有哪些（减少锁粒度，锁分离，锁粗化等等）、举个例子（ConcurrentHashMap减少锁粒度，LinkedBlockingQueue锁分离，读写锁）
+NIO、BIO、AIO
+BIO
+	同步并阻塞，一个连接一个线程，会浪费不必要资源，适用于连接数目比较小的架构
+NIO
+	同步非阻塞，一个请求一个线程，多路复用器侦测到有IO请求，启动线程执行。数量多的短连接，比如聊天服务器
+AIO
+	异步非阻塞，一个有效请求一个线程，客户端IO请求由OS完成后再通知服务器进行处理，适合连接数多且长连接的架构，相册服务器。
+
+装饰者模式、适配器模式： IO流中
+迭代器模式：Iterator
+代理模式： RMI
+
+查询内存泄露的工具：
+Jprobe  EclipseMAT
+
+
+A a = new A();发生了什么
+1. 加载A的class文件进内存
+2. 栈内为a开辟空间
+3. 堆内开辟空间
+4. 成员变量默认初始化
+5. 显示初始化
+6. 构造方法执行
+7. 对象地址赋给a
+
+JConsole 监控JVM内存使用情况，线程堆栈跟踪，已装入的类的信息等
+
+一些开源协议
+BSD  Apache Licence 2.0 GPL LGPL允许商业软件不开源代码，即可发布  Public Domain
+
+HTTP 80 HTTPS 443 FTP 21 SMTP 25 DNS 53
+
+TCP拥塞处理 慢启动，拥塞避免，拥塞发生，快速恢复
+
+慢启动：一个ACK cwnd++,过一个RTT，cwnd *= 2
+
+拥塞避免：1）收到一个ACK时，cwnd = cwnd + 1/cwnd
+
+2）当每过一个RTT时，cwnd = cwnd + 1
+
+拥塞发生：
+超时重传：sshthresh =  cwnd /2
+cwnd 重置为 1
+进入慢启动过程
+
+快速重传：cwnd = cwnd /2
+sshthresh = cwnd
+进入快速恢复算法——Fast Recovery
+
+快速恢复：
+cwnd = sshthresh  + 3 * MSS （3的意思是确认有3个数据包被收到了）
+重传Duplicated ACKs指定的数据包
+如果再收到 duplicated Acks，那么cwnd = cwnd +1
+如果收到了新的Ack，那么，cwnd = sshthresh ，然后就进入了拥塞避免的算法了
