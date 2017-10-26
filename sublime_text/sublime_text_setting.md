@@ -59,7 +59,7 @@ ctrl+shift+p -> PackageResourceViewe -> Theme-Default ->  Default.sublimt-theme 
 	"tabs_small": true,  //编辑区文件栏的大小
 	"theme": "Afterglow.sub lime-theme",   //侧边栏的主题样式
 
-``` 
+```
 之后可以在preference->Color Theme->Theme-Afterglow中调节，当然也可以尝试一下别的主题，只要install进去，可以自行search
 
 ## 个人快捷键设置 key-bindings
@@ -77,8 +77,8 @@ ctrl+shift+p -> PackageResourceViewe -> Theme-Default ->  Default.sublimt-theme 
 		{ "keys": ["alt+up"], "command": "swap_line_up" },
 		{ "keys": ["alt+down"], "command": "swap_line_down" },
 	]
-```	
-	
+```
+
 `mac`
 
 ```json
@@ -107,35 +107,8 @@ ctrl+shift+p -> PackageResourceViewe -> Theme-Default ->  Default.sublimt-theme 
 	"tab_size": 4,
 	"translate_tabs_to_spaces": true,
 	"bold_folder_labels": false,
-	
+
 ]
 ```
 
 ##破解
-—– BEGIN LICENSE —–
-Anthony Sansone
-Single User License
-EA7E-878563
-28B9A648 42B99D8A F2E3E9E0 16DE076E
-E218B3DC F3606379 C33C1526 E8B58964
-B2CB3F63 BDF901BE D31424D2 082891B5
-F7058694 55FA46D8 EFC11878 0868F093
-B17CAFE7 63A78881 86B78E38 0F146238
-BAE22DBB D4EC71A1 0EC2E701 C7F9C648
-5CF29CA3 1CB14285 19A46991 E9A98676
-14FD4777 2D8A0AB6 A444EE0D CA009B54
-—— END LICENSE ——
- 
-—– BEGIN LICENSE —–
-Alexey Plutalov
-Single User License
-EA7E-860776
-3DC19CC1 134CDF23 504DC871 2DE5CE55
-585DC8A6 253BB0D9 637C87A2 D8D0BA85
-AAE574AD BA7D6DA9 2B9773F2 324C5DEF
-17830A4E FBCF9D1D 182406E9 F883EA87
-E585BBA1 2538C270 E2E857C2 194283CA
-7234FF9E D0392F93 1D16E021 F1914917
-63909E12 203C0169 3F08FFC8 86D06EA8
-73DDAEF0 AC559F30 A6A67947 B60104C6
-—— END LICENSE ——

@@ -39,44 +39,46 @@ public static int a = 1;
 在虚拟机中，每一个类都由这个类本身以及它的类加载器来确定它在虚拟机中的唯一性。来自于同一个class文件，但由不同的类加载器加载，这两个类也是不相等的。
 
 ###双亲委派模型(推荐类加载方式)
->**Bootstrap ClassLoader->Extension ClassLoader->Application ClassLoader->User ClassLoader**	
+>**Bootstrap ClassLoader->Extension ClassLoader->Application ClassLoader->User ClassLoader**
 
 关于调用类加载器时，会将请求交给父加载器去处理，父加载器处理不了，再由子加载器进行加载。这样做可以避免许多安全问题，例如用户自己写了一个Object类，然后进行加载，如果加载成功，就会天下大乱。以下是ClassLoader类的loadClass方法，可以看到先去调用父类，如果父类找不到，或者没有父类在启动类加载器中也找不到，那么就调用findClss方法去加载，我们可以在findClass中重写。
 
-	protected Class<?> loadClass(String name, boolean resolve)
-        throws ClassNotFoundException
-    {
-        synchronized (getClassLoadingLock(name)) {
-            // First, check if the class has already been loaded
-            Class<?> c = findLoadedClass(name);
+```java
+protected Class<?> loadClass(String name, boolean resolve)
+    throws ClassNotFoundException
+{
+    synchronized (getClassLoadingLock(name)) {
+        // First, check if the class has already been loaded
+        Class<?> c = findLoadedClass(name);
+        if (c == null) {
+            long t0 = System.nanoTime();
+            try {
+                if (parent != null) {
+                    c = parent.loadClass(name, false);
+                } else {
+                    c = findBootstrapClassOrNull(name);
+                }
+            } catch (ClassNotFoundException e) {
+                // ClassNotFoundException thrown if class not found
+                // from the non-null parent class loader
+            }
+
             if (c == null) {
-                long t0 = System.nanoTime();
-                try {
-                    if (parent != null) {
-                        c = parent.loadClass(name, false);
-                    } else {
-                        c = findBootstrapClassOrNull(name);
-                    }
-                } catch (ClassNotFoundException e) {
-                    // ClassNotFoundException thrown if class not found
-                    // from the non-null parent class loader
-                }
+                // If still not found, then invoke findClass in order
+                // to find the class.
+                long t1 = System.nanoTime();
+                c = findClass(name);
 
-                if (c == null) {
-                    // If still not found, then invoke findClass in order
-                    // to find the class.
-                    long t1 = System.nanoTime();
-                    c = findClass(name);
-
-                    // this is the defining class loader; record the stats
-                    sun.misc.PerfCounter.getParentDelegationTime().addTime(t1 - t0);
-                    sun.misc.PerfCounter.getFindClassTime().addElapsedTimeFrom(t1);
-                    sun.misc.PerfCounter.getFindClasses().increment();
-                }
+                // this is the defining class loader; record the stats
+                sun.misc.PerfCounter.getParentDelegationTime().addTime(t1 - t0);
+                sun.misc.PerfCounter.getFindClassTime().addElapsedTimeFrom(t1);
+                sun.misc.PerfCounter.getFindClasses().increment();
             }
-            if (resolve) {
-                resolveClass(c);
-            }
-            return c;
         }
+        if (resolve) {
+            resolveClass(c);
+        }
+        return c;
     }
+}
+```
