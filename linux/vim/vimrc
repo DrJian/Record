@@ -112,7 +112,7 @@ set hlsearch                " 搜索时高亮显示被找到的文本
 set ignorecase smartcase    " 搜索时忽略大小写，但在有一个或以上大写字母时
                             " 仍保持对大小写敏感
 set incsearch               " 输入搜索内容时就显示搜索结果
-set mouse=                  " 设定在任何模式下鼠标都可用
+set mouse=a                  " 设定在任何模式下鼠标都可用
 set nobackup                " 覆盖文件时不备份
 set nocompatible            " 设定 gvim 运行在增强模式下
 set noignorecase            " 默认区分大小写
