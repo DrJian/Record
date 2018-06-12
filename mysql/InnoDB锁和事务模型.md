@@ -213,3 +213,38 @@ Session A 获取Gap Lock，Session B无法insert，但可以对其他记录updat
 
 ### 对存在记录加锁
 
+`Session A`
+
+```mysql
+mysql> begin;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> select * from test where val = 5 for update;
++----+------+
+| id | val  |
++----+------+
+|  5 |    5 |
++----+------+
+1 row in set (0.00 sec)
+```
+
+`Session B`
+
+```mysql
+mysql> begin;
+
+mysql> insert into test set id = 3, val = 3;
+Blocking...
+
+mysql> insert into test set id = 4, val = 4;
+Blocking...
+
+mysql> update test set val = 55 where id = 5;
+Blocking...
+
+mysql> update test set val = 66 where id = 6;
+Query OK, 1 row affected (0.00 sec)
+Rows matched: 1  Changed: 1  Warnings: 0
+```
+
+Session A获取到了Next-Key Lock，Session B无法在间隙进行insert，无法修改有Record  Lock的id为5的记录，但可以对id5以外的间隙内其他记录进行update。
