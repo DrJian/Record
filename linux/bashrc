@@ -5,10 +5,12 @@
 
 
 # Source global definitions
+
+```bash
 if [ -f /etc/bashrc ]; then
 	. /etc/bashrc
 fi
 PS1="\[\033[0;35m\]\u@\[\033[0;33m\]$HOSTNAME:\[\033[0;31m\]`pwd`\[\033[37;36m\]\n$ \[\033[0;37m\]"
 export PS1='\u@${HOSTNAME}:`pwd` \n$ '
-
+```
 
