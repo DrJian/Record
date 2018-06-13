@@ -63,9 +63,9 @@ InnoDB的间隙锁是非常单纯的**阻止插入**，因为它仅阻止其他�
 
 ## Next-Key Lock
 
-同时锁住行记录与间隙。
+同时锁住行记录与间隙，即Record Lock 与 Gap Lock的结合。
 
-行锁是InnoDB在扫描表的索引时，将遇到的匹配的行记录加上S锁或X锁。所以行锁其实是索引记录的锁。针对PR级别的锁，使用Record Lock+Gap Lock。但如果使用唯一或者主键索引，锁细化为行锁。InnoDB借助Next-Key Lock避免幻读的产生。
+行锁是InnoDB在扫描表的索引时，将遇到的匹配的行记录加上S锁或X锁。所以行锁其实是索引记录的锁。针对PR的隔离级别，使用Record Lock+Gap Lock。但如果使用唯一或者主键索引，锁细化为行锁。InnoDB借助Next-Key Lock避免幻读的产生。
 
 ### 关于幻读
 
@@ -73,7 +73,227 @@ InnoDB的间隙锁是非常单纯的**阻止插入**，因为它仅阻止其他�
 
 如果在不同的间隙，除非获取对应间隙锁，否则是无效的。
 
-# 关于间隙锁的实验结论
+## 插入意向锁(Insert Intention Lock)
+
+插入意向锁是在插入行记录之前由插入操作触发的一种**间隙锁**。这表明了插入的意愿，在多个事务都在同一间隙的不同位置执行插入操作时不用等待。
+
+> 假定现在有4和7的两条索引记录，两个不同的事务去插入5和6的索引记录，在获取插入记录的互斥锁(X Lock)之前，分别在同一间隙设置了插入意向锁，当然前提是插入不同的两条记录，如果两个事务插入相同的记录，有一个无法获取插入意向锁。
+
+### 实验一
+
+初始数据
+
+```mysql
+mysql> select * from test;
++----+------+
+| id | val  |
++----+------+
+|  0 |    0 |
+|  1 |    1 |
+|  2 |    2 |
+|  5 |    5 |
+|  6 |    6 |
+|  7 |    7 |
+|  8 |    8 |
++----+------+
+
+CREATE TABLE `test` (
+  `id` int(11) NOT NULL,
+  `val` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_val` (`val`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+```
+
+`Session A`
+
+```mysql
+mysql> begin;
+Query OK, 0 rows affected (0.01 sec)
+
+mysql> select * from test where id > 2 for update;
++----+------+
+| id | val  |
++----+------+
+|  5 |    5 |
+|  6 |    6 |
+|  7 |    7 |
+|  8 |    8 |
++----+------+
+4 rows in set (0.00 sec)
+```
+
+`Session B`
+
+```mysql
+mysql> begin;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> insert into test set id = 3, val = 3;
+Blocking
+```
+
+查看innodb引擎目前的执行状况
+
+```mysql
+mysql>show engine innodb status;
+
+---TRANSACTION 16146, ACTIVE 100 sec inserting
+mysql tables in use 1, locked 1
+LOCK WAIT 2 lock struct(s), heap size 1136, 2 row lock(s)
+MySQL thread id 4, OS thread handle 123145403211776, query id 67 localhost root update
+insert into test set id = 3, val = 3
+------- TRX HAS BEEN WAITING 1 SEC FOR THIS LOCK TO BE GRANTED:
+RECORD LOCKS space id 54 page no 3 n bits 80 index PRIMARY of table `hongjian`.`test` trx id 16146 lock_mode X locks gap before rec insert intention waiting
+Record lock, heap no 7 PHYSICAL RECORD: n_fields 4; compact format; info bits 0
+ 0: len 4; hex 80000005; asc     ;;
+ 1: len 6; hex 000000003d3f; asc     =?;;
+ 2: len 7; hex ac00000120011c; asc        ;;
+ 3: len 4; hex 80000005; asc     ;;
+```
+
+**结论**
+
+Session A获取Gap Lock+id > 2记录(5,6)的X锁，观察日志，Session B等待id 3记录的插入意向锁。
+
+### 实验二
+
+初始数据
+
+```mysql
+mysql> select * from test;
++----+------+
+| id | val  |
++----+------+
+|  0 |    0 |
+|  1 |    1 |
+|  2 |    2 |
+|  5 |    5 |
+|  6 |    6 |
+|  7 |    7 |
+|  8 |    8 |
++----+------+
+
+CREATE TABLE `test` (
+  `id` int(11) NOT NULL,
+  `val` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_val` (`val`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+```
+
+`Session A`
+
+```mysql
+mysql> begin;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> select * from test where id = 3 for update;
+Empty set (0.00 sec)
+```
+
+`Session B`
+
+```mysql
+mysql> begin;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> insert into test set id = 3, val = 3;
+Blocking
+```
+
+查看innodb引擎目前的执行状况
+
+```mysql
+mysql> show engine innodb status\G
+
+---TRANSACTION 16148, ACTIVE 3 sec inserting
+mysql tables in use 1, locked 1
+LOCK WAIT 2 lock struct(s), heap size 1136, 1 row lock(s)
+MySQL thread id 4, OS thread handle 123145403211776, query id 75 localhost root update
+insert into test set id = 3, val = 3
+------- TRX HAS BEEN WAITING 3 SEC FOR THIS LOCK TO BE GRANTED:
+RECORD LOCKS space id 54 page no 3 n bits 80 index PRIMARY of table `hongjian`.`test` trx id 16148 lock_mode X locks gap before rec insert intention waiting
+Record lock, heap no 7 PHYSICAL RECORD: n_fields 4; compact format; info bits 0
+ 0: len 4; hex 80000005; asc     ;;
+ 1: len 6; hex 000000003d3f; asc     =?;;
+ 2: len 7; hex ac00000120011c; asc        ;;
+ 3: len 4; hex 80000005; asc     ;;
+```
+
+**结论**
+
+Session A获取到了id 3 记录的Record Lock + Gap Lock，观察日志，Session B等待id 3记录的插入意向锁。
+
+### 实验三
+
+初始数据
+
+```mysql
+mysql> select * from test;
++----+------+
+| id | val  |
++----+------+
+|  0 |    0 |
+|  1 |    1 |
+|  2 |    2 |
+|  5 |    5 |
+|  6 |    6 |
+|  7 |    7 |
+|  8 |    8 |
++----+------+
+
+CREATE TABLE `test` (
+  `id` int(11) NOT NULL,
+  `val` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_val` (`val`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+```
+
+`Session A`
+
+```mysql
+begin;
+
+mysql> select * from test where id > 2 for update;
+```
+
+`Session B`
+
+```mysql
+begin;
+
+mysql> update test set val = 55 where id = 5;
+Blocking
+```
+
+查看innodb引擎目前的执行状况
+
+```mysql
+mysql> show engine innodb status\G
+
+---TRANSACTION 16148, ACTIVE 131 sec starting index read
+mysql tables in use 1, locked 1
+LOCK WAIT 2 lock struct(s), heap size 1136, 2 row lock(s)
+MySQL thread id 4, OS thread handle 123145403211776, query id 80 localhost root updating
+update test set val = 55 where id = 5
+------- TRX HAS BEEN WAITING 1 SEC FOR THIS LOCK TO BE GRANTED:
+RECORD LOCKS space id 54 page no 3 n bits 80 index PRIMARY of table `hongjian`.`test` trx id 16148 lock_mode X locks rec but not gap waiting
+Record lock, heap no 7 PHYSICAL RECORD: n_fields 4; compact format; info bits 0
+ 0: len 4; hex 80000005; asc     ;;
+ 1: len 6; hex 000000003d3f; asc     =?;;
+ 2: len 7; hex ac00000120011c; asc        ;;
+ 3: len 4; hex 80000005; asc     ;;
+```
+
+**结论**
+
+Session A获取到了多行(5,6)X Lock + Gap Lock，观察日志，Session B等待id 3记录的Record Lock
+
+
+
+# 关于间隙锁的实验
 
 ## 表结构组成
 
@@ -146,7 +366,53 @@ Query OK, 1 row affected (0.00 sec)
 Rows matched: 1  Changed: 1  Warnings: 0
 ```
 
-Session A拥有Gap Lock，Session B无法插入间隙内数据，但可以执行更新。
+查看innodb引擎执行情况
+
+```mysql
+mysql> select * from information_schema.INNODB_LOCKS\G
+*************************** 1. row ***************************
+    lock_id: 16170:54:3:7
+lock_trx_id: 16170
+  lock_mode: X,GAP
+  lock_type: RECORD
+ lock_table: `hongjian`.`test`
+ lock_index: PRIMARY
+ lock_space: 54
+  lock_page: 3
+   lock_rec: 7
+  lock_data: 5
+*************************** 2. row ***************************
+    lock_id: 16169:54:3:7
+lock_trx_id: 16169
+  lock_mode: X,GAP
+  lock_type: RECORD
+ lock_table: `hongjian`.`test`
+ lock_index: PRIMARY
+ lock_space: 54
+  lock_page: 3
+   lock_rec: 7
+  lock_data: 5
+2 rows in set, 1 warning (0.00 sec)
+
+mysql> show engine innodb status\G
+
+---TRANSACTION 16170, ACTIVE 1 sec inserting
+mysql tables in use 1, locked 1
+LOCK WAIT 2 lock struct(s), heap size 1136, 1 row lock(s)
+MySQL thread id 4, OS thread handle 123145403211776, query id 156 localhost root update
+insert into test set id = 4,val = 4
+------- TRX HAS BEEN WAITING 1 SEC FOR THIS LOCK TO BE GRANTED:
+RECORD LOCKS space id 54 page no 3 n bits 80 index PRIMARY of table `hongjian`.`test` trx id 16170 lock_mode X locks gap before rec insert intention waiting
+Record lock, heap no 7 PHYSICAL RECORD: n_fields 4; compact format; info bits 0
+ 0: len 4; hex 80000005; asc     ;;
+ 1: len 6; hex 000000003d3f; asc     =?;;
+ 2: len 7; hex ac00000120011c; asc        ;;
+ 3: len 4; hex 80000005; asc     ;;
+```
+
+**总结**
+
+Session A拥有Gap Lock + 对应记录的X Lock，Session B无法插入间隙内数据，但可以执行其他记录的更新，Session B在等待获取插入意向锁。
 
 ### 对存在的记录加锁
 
@@ -181,7 +447,53 @@ mysql> insert into test set id = 4,val=4;
 Query OK, 1 row affected (0.00 sec)
 ```
 
-Session A使用唯一键，获取到存在记录的Record Lock，所以Session B可以对Record Lock记录以外的记录进行insert update
+查看innodb引擎执行情况
+
+```mysql
+mysql> select * from information_schema.INNODB_LOCKS\G
+*************************** 1. row ***************************
+    lock_id: 16166:54:3:7
+lock_trx_id: 16166
+  lock_mode: X
+  lock_type: RECORD
+ lock_table: `hongjian`.`test`
+ lock_index: PRIMARY
+ lock_space: 54
+  lock_page: 3
+   lock_rec: 7
+  lock_data: 5
+*************************** 2. row ***************************
+    lock_id: 16165:54:3:7
+lock_trx_id: 16165
+  lock_mode: X
+  lock_type: RECORD
+ lock_table: `hongjian`.`test`
+ lock_index: PRIMARY
+ lock_space: 54
+  lock_page: 3
+   lock_rec: 7
+  lock_data: 5
+2 rows in set, 1 warning (0.00 sec)
+
+mysql> show engine innodb status\G
+
+---TRANSACTION 16166, ACTIVE 2 sec starting index read
+mysql tables in use 1, locked 1
+LOCK WAIT 2 lock struct(s), heap size 1136, 1 row lock(s)
+MySQL thread id 4, OS thread handle 123145403211776, query id 133 localhost root updating
+update test set val=55 where id = 5
+------- TRX HAS BEEN WAITING 2 SEC FOR THIS LOCK TO BE GRANTED:
+RECORD LOCKS space id 54 page no 3 n bits 80 index PRIMARY of table `hongjian`.`test` trx id 16166 lock_mode X locks rec but not gap waiting
+Record lock, heap no 7 PHYSICAL RECORD: n_fields 4; compact format; info bits 0
+ 0: len 4; hex 80000005; asc     ;;
+ 1: len 6; hex 000000003d3f; asc     =?;;
+ 2: len 7; hex ac00000120011c; asc        ;;
+ 3: len 4; hex 80000005; asc     ;;
+```
+
+**结论**
+
+Session A使用唯一键，获取到存在记录的X Lock，所以Session B可以对Record Lock记录以外的记录进行insert update，Session B在等待该记录的X锁。
 
 ## 间隙锁仅防止插入，针对二级索引加锁
 
@@ -200,6 +512,9 @@ Empty set (0.01 sec)
 `Session B`
 
 ```mysql
+mysql> begin;
+Query OK, 0 rows affected (0.00 sec)
+
 mysql> insert into test set id = 3, val = 3;
 Blocking...
 mysql> insert into test set id = 4, val = 4;
@@ -209,7 +524,53 @@ mysql> update test set val = 55 where id = 5\G
 Query OK, 1 row affected (0.00 sec)
 ```
 
-Session A 获取Gap Lock，Session B无法insert，但可以对其他记录update
+查看innodb引擎执行情况
+
+```mysql
+mysql> select * from information_schema.INNODB_LOCKS\G
+*************************** 1. row ***************************
+    lock_id: 16168:54:4:7
+lock_trx_id: 16168
+  lock_mode: X,GAP
+  lock_type: RECORD
+ lock_table: `hongjian`.`test`
+ lock_index: idx_val
+ lock_space: 54
+  lock_page: 4
+   lock_rec: 7
+  lock_data: 5, 5
+*************************** 2. row ***************************
+    lock_id: 16167:54:4:7
+lock_trx_id: 16167
+  lock_mode: X,GAP
+  lock_type: RECORD
+ lock_table: `hongjian`.`test`
+ lock_index: idx_val
+ lock_space: 54
+  lock_page: 4
+   lock_rec: 7
+  lock_data: 5, 5
+2 rows in set, 1 warning (0.00 sec)
+
+mysql> show engine innodb status\G
+
+---TRANSACTION 281479545839168, not started
+0 lock struct(s), heap size 1136, 0 row lock(s)
+---TRANSACTION 16168, ACTIVE 1 sec inserting
+mysql tables in use 1, locked 1
+LOCK WAIT 2 lock struct(s), heap size 1136, 1 row lock(s), undo log entries 1
+MySQL thread id 4, OS thread handle 123145403211776, query id 141 localhost root update
+insert into test set id = 3, val = 3
+------- TRX HAS BEEN WAITING 1 SEC FOR THIS LOCK TO BE GRANTED:
+RECORD LOCKS space id 54 page no 4 n bits 80 index idx_val of table `hongjian`.`test` trx id 16168 lock_mode X locks gap before rec insert intention waiting
+Record lock, heap no 7 PHYSICAL RECORD: n_fields 2; compact format; info bits 0
+ 0: len 4; hex 80000005; asc     ;;
+ 1: len 4; hex 80000005; asc     ;;
+```
+
+**结论**
+
+Session A 获取Gap Lock+对应记录的X Lock，Session B无法insert，等待插入意向锁，但可以对其他记录update
 
 ### 对存在记录加锁
 
@@ -247,4 +608,48 @@ Query OK, 1 row affected (0.00 sec)
 Rows matched: 1  Changed: 1  Warnings: 0
 ```
 
-Session A获取到了Next-Key Lock，Session B无法在间隙进行insert，无法修改有Record  Lock的id为5的记录，但可以对id5以外的间隙内其他记录进行update。
+查看innodb引擎执行情况
+
+```mysql
+mysql> select * from information_schema.INNODB_LOCKS\G
+*************************** 1. row ***************************
+    lock_id: 16164:54:4:7
+lock_trx_id: 16164
+  lock_mode: X,GAP
+  lock_type: RECORD
+ lock_table: `hongjian`.`test`
+ lock_index: idx_val
+ lock_space: 54
+  lock_page: 4
+   lock_rec: 7
+  lock_data: 5, 5
+*************************** 2. row ***************************
+    lock_id: 16163:54:4:7
+lock_trx_id: 16163
+  lock_mode: X
+  lock_type: RECORD
+ lock_table: `hongjian`.`test`
+ lock_index: idx_val
+ lock_space: 54
+  lock_page: 4
+   lock_rec: 7
+  lock_data: 5, 5
+2 rows in set, 1 warning (0.00 sec)
+
+mysql> show engine innodb status\G
+
+---TRANSACTION 16164, ACTIVE 1 sec inserting
+mysql tables in use 1, locked 1
+LOCK WAIT 2 lock struct(s), heap size 1136, 1 row lock(s), undo log entries 1
+MySQL thread id 4, OS thread handle 123145403211776, query id 112 localhost root update
+insert into test set id = 3, val = 3
+------- TRX HAS BEEN WAITING 1 SEC FOR THIS LOCK TO BE GRANTED:
+RECORD LOCKS space id 54 page no 4 n bits 80 index idx_val of table `hongjian`.`test` trx id 16164 lock_mode X locks gap before rec insert intention waiting
+Record lock, heap no 7 PHYSICAL RECORD: n_fields 2; compact format; info bits 0
+ 0: len 4; hex 80000005; asc     ;;
+ 1: len 4; hex 80000005; asc     ;;
+```
+
+**结论**
+
+Session A获取到了Next-Key Lock，Session B无法在间隙进行insert，等待插入意向锁，无法修改Record  Lock的id为5的记录，但可以对id5以外的间隙内其他记录进行update。
