@@ -43,11 +43,11 @@ InnoDB支持多种粒度的锁，允许行锁和表锁的并存。例如，语�
 TABLE LOCK table `test`.`t` trx id 10080 lock mode IX
 ```
 
-## 行锁(Record Lock)
+## 行锁LOCK_REC_NOT_GAP)
 
 行锁是锁在索引记录上的一种锁类型，注意这里指的是锁定索引。
 
-## 间隙锁(Gap Lock)
+## 间隙锁(LOCK_GAP)
 
 间隙锁锁定索引记录之间的数据，或者第一条记录之前，最后一条记录之后的数据。
 
@@ -61,7 +61,7 @@ InnoDB的间隙锁是非常单纯的**阻止插入**，因为它仅阻止其他�
 
 间隙锁可以被关闭，当我们把数据库隔离级别调至提交读，同时事务会读到快照数据的最新版本。
 
-## Next-Key Lock
+## Next-Key Lock(LOCK_ORDINARY)
 
 同时锁住行记录与间隙，即Record Lock 与 Gap Lock的结合。
 
@@ -136,15 +136,40 @@ Blocking
 查看innodb引擎目前的执行状况
 
 ```mysql
+mysql> select * from information_schema.INNODB_LOCKS\G
+*************************** 1. row ***************************
+    lock_id: 16172:54:3:7
+lock_trx_id: 16172
+  lock_mode: X,GAP
+  lock_type: RECORD
+ lock_table: `hongjian`.`test`
+ lock_index: PRIMARY
+ lock_space: 54
+  lock_page: 3
+   lock_rec: 7
+  lock_data: 5
+*************************** 2. row ***************************
+    lock_id: 16171:54:3:7
+lock_trx_id: 16171
+  lock_mode: X
+  lock_type: RECORD
+ lock_table: `hongjian`.`test`
+ lock_index: PRIMARY
+ lock_space: 54
+  lock_page: 3
+   lock_rec: 7
+  lock_data: 5
+2 rows in set, 1 warning (0.01 sec)
+
 mysql>show engine innodb status;
 
----TRANSACTION 16146, ACTIVE 100 sec inserting
+---TRANSACTION 16172, ACTIVE 2 sec inserting
 mysql tables in use 1, locked 1
-LOCK WAIT 2 lock struct(s), heap size 1136, 2 row lock(s)
-MySQL thread id 4, OS thread handle 123145403211776, query id 67 localhost root update
+LOCK WAIT 2 lock struct(s), heap size 1136, 1 row lock(s)
+MySQL thread id 4, OS thread handle 123145403211776, query id 164 localhost root update
 insert into test set id = 3, val = 3
-------- TRX HAS BEEN WAITING 1 SEC FOR THIS LOCK TO BE GRANTED:
-RECORD LOCKS space id 54 page no 3 n bits 80 index PRIMARY of table `hongjian`.`test` trx id 16146 lock_mode X locks gap before rec insert intention waiting
+------- TRX HAS BEEN WAITING 2 SEC FOR THIS LOCK TO BE GRANTED:
+RECORD LOCKS space id 54 page no 3 n bits 80 index PRIMARY of table `hongjian`.`test` trx id 16172 lock_mode X locks gap before rec insert intention waiting
 Record lock, heap no 7 PHYSICAL RECORD: n_fields 4; compact format; info bits 0
  0: len 4; hex 80000005; asc     ;;
  1: len 6; hex 000000003d3f; asc     =?;;
@@ -205,15 +230,40 @@ Blocking
 查看innodb引擎目前的执行状况
 
 ```mysql
+mysql> select * from information_schema.INNODB_LOCKS\G
+*************************** 1. row ***************************
+    lock_id: 16174:54:3:7
+lock_trx_id: 16174
+  lock_mode: X,GAP
+  lock_type: RECORD
+ lock_table: `hongjian`.`test`
+ lock_index: PRIMARY
+ lock_space: 54
+  lock_page: 3
+   lock_rec: 7
+  lock_data: 5
+*************************** 2. row ***************************
+    lock_id: 16173:54:3:7
+lock_trx_id: 16173
+  lock_mode: X,GAP
+  lock_type: RECORD
+ lock_table: `hongjian`.`test`
+ lock_index: PRIMARY
+ lock_space: 54
+  lock_page: 3
+   lock_rec: 7
+  lock_data: 5
+2 rows in set, 1 warning (0.00 sec)
+
 mysql> show engine innodb status\G
 
----TRANSACTION 16148, ACTIVE 3 sec inserting
+---TRANSACTION 16174, ACTIVE 2 sec inserting
 mysql tables in use 1, locked 1
 LOCK WAIT 2 lock struct(s), heap size 1136, 1 row lock(s)
-MySQL thread id 4, OS thread handle 123145403211776, query id 75 localhost root update
+MySQL thread id 4, OS thread handle 123145403211776, query id 172 localhost root update
 insert into test set id = 3, val = 3
-------- TRX HAS BEEN WAITING 3 SEC FOR THIS LOCK TO BE GRANTED:
-RECORD LOCKS space id 54 page no 3 n bits 80 index PRIMARY of table `hongjian`.`test` trx id 16148 lock_mode X locks gap before rec insert intention waiting
+------- TRX HAS BEEN WAITING 2 SEC FOR THIS LOCK TO BE GRANTED:
+RECORD LOCKS space id 54 page no 3 n bits 80 index PRIMARY of table `hongjian`.`test` trx id 16174 lock_mode X locks gap before rec insert intention waiting
 Record lock, heap no 7 PHYSICAL RECORD: n_fields 4; compact format; info bits 0
  0: len 4; hex 80000005; asc     ;;
  1: len 6; hex 000000003d3f; asc     =?;;
@@ -271,15 +321,40 @@ Blocking
 查看innodb引擎目前的执行状况
 
 ```mysql
+mysql> select * from information_schema.INNODB_LOCKS\G
+*************************** 1. row ***************************
+    lock_id: 16176:54:3:7
+lock_trx_id: 16176
+  lock_mode: X
+  lock_type: RECORD
+ lock_table: `hongjian`.`test`
+ lock_index: PRIMARY
+ lock_space: 54
+  lock_page: 3
+   lock_rec: 7
+  lock_data: 5
+*************************** 2. row ***************************
+    lock_id: 16175:54:3:7
+lock_trx_id: 16175
+  lock_mode: X
+  lock_type: RECORD
+ lock_table: `hongjian`.`test`
+ lock_index: PRIMARY
+ lock_space: 54
+  lock_page: 3
+   lock_rec: 7
+  lock_data: 5
+2 rows in set, 1 warning (0.01 sec)
+
 mysql> show engine innodb status\G
 
----TRANSACTION 16148, ACTIVE 131 sec starting index read
+---TRANSACTION 16176, ACTIVE 1 sec starting index read
 mysql tables in use 1, locked 1
-LOCK WAIT 2 lock struct(s), heap size 1136, 2 row lock(s)
-MySQL thread id 4, OS thread handle 123145403211776, query id 80 localhost root updating
+LOCK WAIT 2 lock struct(s), heap size 1136, 1 row lock(s)
+MySQL thread id 4, OS thread handle 123145403211776, query id 181 localhost root updating
 update test set val = 55 where id = 5
 ------- TRX HAS BEEN WAITING 1 SEC FOR THIS LOCK TO BE GRANTED:
-RECORD LOCKS space id 54 page no 3 n bits 80 index PRIMARY of table `hongjian`.`test` trx id 16148 lock_mode X locks rec but not gap waiting
+RECORD LOCKS space id 54 page no 3 n bits 80 index PRIMARY of table `hongjian`.`test` trx id 16176 lock_mode X locks rec but not gap waiting
 Record lock, heap no 7 PHYSICAL RECORD: n_fields 4; compact format; info bits 0
  0: len 4; hex 80000005; asc     ;;
  1: len 6; hex 000000003d3f; asc     =?;;
@@ -289,7 +364,20 @@ Record lock, heap no 7 PHYSICAL RECORD: n_fields 4; compact format; info bits 0
 
 **结论**
 
-Session A获取到了多行(5,6)X Lock + Gap Lock，观察日志，Session B等待id 3记录的Record Lock
+Session A获取到了多行(5,6)X Lock + Gap Lock，观察日志，Session B等待id 3记录的Record Lock。
+
+## 自增锁
+
+在执行插入时，针对自增的列会用到，如果一个事务对表A进行插入，其他对表A进行插入的事务必须等待，因此在合并插入的时候，可以保证列数值的连续性。
+
+# 锁的兼容性图谱
+
+| 第一行为已持有的锁，第一列为正在请求的锁 |    Gap     | Insert Intention |   Record   |  Next-Key  |
+| :--------------------------------------: | :--------: | :--------------: | :--------: | :--------: |
+|                   Gap                    | Compatible |    Compatible    | Compatible | Compatible |
+|             Insert Intention             |  Conflict  |    Compatible    | Compatible |  Conflict  |
+|                  Record                  | Compatible |    Compatible    |  Conflict  |  Conflict  |
+|                 Next-Key                 | Compatible |    Compatible    |  Conflict  |  Conflict  |
 
 
 
